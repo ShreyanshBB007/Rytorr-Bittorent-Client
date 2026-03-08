@@ -1,7 +1,8 @@
 def decode_int(data, index):
     end = data.index(b'e', index)
     num = int(data[index+1:end])
-    return num, end
+    return num, end + 1
+
 
 def decode_string(data, index):
     colon = data.index(b":", index)
@@ -10,11 +11,13 @@ def decode_string(data, index):
     end = start + length
     return data[start:end], end
 
+
 def decode_list(data, index):
     items = []
     index += 1
 
     while data[index:index+1] != b'e':
+
         if data[index:index+1] == b'i':
             val, index = decode_int(data, index)
 
@@ -31,11 +34,13 @@ def decode_list(data, index):
 
     return items, index + 1
 
+
 def decode_dict(data, index):
     items = {}
     index += 1
 
     while data[index:index+1] != b'e':
+
         keystring, index = decode_string(data, index)
 
         if data[index:index+1] == b'i':
@@ -49,10 +54,11 @@ def decode_dict(data, index):
 
         else:
             val, index = decode_string(data, index)
-        
-        items[keystring] = val
-    
-    return items, index+1
+
+        items[keystring.decode()] = val
+
+    return items, index + 1
+
 
 def decode(data, index=0):
 
