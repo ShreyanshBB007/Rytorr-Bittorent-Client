@@ -45,7 +45,6 @@ class Torrent:
                 except Exception:
                     continue
 
-        # Preserve order while removing duplicates.
         return list(dict.fromkeys(trackers))
 
     def _select_http_tracker(self, trackers, fallback):
