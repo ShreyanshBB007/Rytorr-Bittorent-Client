@@ -27,7 +27,9 @@ class Torrent:
     def _get_info_bytes(self, data):
         start = data.index(b"4:info") + len("4:info")
 
-        info_bytes = data[start:]
+        # Hash exactly the bencoded info dictionary bytes, not trailing torrent data.
+        _, end = decode(data, start)
+        info_bytes = data[start:end]
 
         return info_bytes
 

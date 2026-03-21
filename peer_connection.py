@@ -1,6 +1,7 @@
 import socket
+
 def build_handshake(peer_id, info_hash):
-    pstr = b'Bittorent protocol'
+    pstr = b'BitTorrent protocol'
     pstrlen  = len(pstr)
 
     reserved = b'\x00' * 8
@@ -39,7 +40,7 @@ def handshake_with_peer(ip, port, info_hash, peer_id):
 
     sock = connect_to_peer(ip, port)
 
-    handshake = build_handshake(info_hash, peer_id)
+    handshake = build_handshake(peer_id, info_hash)
 
     sock.send(handshake)
 

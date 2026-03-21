@@ -61,31 +61,31 @@ class PieceManager:
 
         return None
 
-def handle_piece_received(self, piece_index, begin, data):
-    if piece_index < 0 or piece_index >= self.total_pieces:
-        return
+    def handle_piece_received(self, piece_index, begin, data):
+        if piece_index < 0 or piece_index >= self.total_pieces:
+            return
 
-    if piece_index in self.completed_pieces:
-        return
+        if piece_index in self.completed_pieces:
+            return
 
-    piece = self.pieces[piece_index]
+        piece = self.pieces[piece_index]
 
-    print(f"Received block for piece {piece_index}, begin={begin}")
+        print(f"Received block for piece {piece_index}, begin={begin}")
 
-    piece.add_block(begin, data)
+        piece.add_block(begin, data)
 
-    if piece.is_complete():
-        expected_hash = self.get_piece_hash(piece_index)
+        if piece.is_complete():
+            expected_hash = self.get_piece_hash(piece_index)
 
-        if piece.verify(expected_hash):
-            self.in_progress_pieces.discard(piece_index)
-            self.completed_pieces.add(piece_index)
-            print(f"Piece {piece_index} completed and verified")
-        else:
-            print(f"Piece {piece_index} failed verification, retrying")
-            piece.reset()
-            self.in_progress_pieces.discard(piece_index)
-            self.missing_pieces.add(piece_index)
+            if piece.verify(expected_hash):
+                self.in_progress_pieces.discard(piece_index)
+                self.completed_pieces.add(piece_index)
+                print(f"Piece {piece_index} completed and verified")
+            else:
+                print(f"Piece {piece_index} failed verification, retrying")
+                piece.reset()
+                self.in_progress_pieces.discard(piece_index)
+                self.missing_pieces.add(piece_index)
 
 
 class Piece:
