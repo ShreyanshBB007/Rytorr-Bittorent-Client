@@ -86,6 +86,8 @@ class PieceManager:
                 piece.reset()
                 self.in_progress_pieces.discard(piece_index)
                 self.missing_pieces.add(piece_index)
+    def get_piece_data(self, index):
+        return self.pieces[index].assemble()
 
 
 class Piece:
