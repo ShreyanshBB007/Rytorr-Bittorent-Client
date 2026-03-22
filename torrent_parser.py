@@ -24,6 +24,29 @@ class Torrent:
 
         self.info_hash = hashlib.sha1(self._get_info_bytes(data)).digest()
 
+        self.files_info = []
+
+        if "files" in self.info:
+            offset = 0
+
+            for f in self.info["files"]:
+                length = f["length"]
+                path = "/".join(p.decode() for p in f["path"])
+
+                self.files_info.append({
+                    "path": path,
+                    "length": length,
+                    "offset": offset
+                })
+
+                offset += length
+        else:
+            self.files_info.append({
+                "path": self.name,
+                "length": self.length,
+                "offset": 0
+            })
+
     def _get_info_bytes(self, data):
         start = data.index(b"4:info") + len("4:info")
 
