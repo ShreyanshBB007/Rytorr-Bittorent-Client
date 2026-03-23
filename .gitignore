@@ -1,1 +1,7 @@
 downloaded-files
+
+__pycache__/
+*.pyc
+
+sintel.torrent
+big-buck-bunny.torrent

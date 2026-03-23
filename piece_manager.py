@@ -1,10 +1,12 @@
 import math
 import hashlib
+import threading
 
 
 class PieceManager:
     def __init__(self, torrent_data):
 
+        self.lock = threading.Lock()
         self.piece_length = torrent_data.piece_length
         self.file_length = torrent_data.length
         self.raw_pieces = torrent_data.pieces
@@ -40,57 +42,59 @@ class PieceManager:
         return self.piece_hashes[index]
 
     def get_next_block_request(self):
-        for piece_index in self.in_progress_pieces:
-            piece = self.pieces[piece_index]
-            block = piece.get_next_block()
+        with self.lock:
+            for piece_index in self.in_progress_pieces:
+                piece = self.pieces[piece_index]
+                block = piece.get_next_block()
 
-            if block is not None:
-                begin, length = block
-                return (piece_index, begin, length)
+                if block is not None:
+                    begin, length = block
+                    return (piece_index, begin, length)
 
-        if self.missing_pieces:
-            piece_index = self.missing_pieces.pop()
-            self.in_progress_pieces.add(piece_index)
+            if self.missing_pieces:
+                piece_index = self.missing_pieces.pop()
+                self.in_progress_pieces.add(piece_index)
 
-            piece = self.pieces[piece_index]
-            block = piece.get_next_block()
+                piece = self.pieces[piece_index]
+                block = piece.get_next_block()
 
-            if block is not None:
-                begin, length = block
-                return (piece_index, begin, length)
+                if block is not None:
+                    begin, length = block
+                    return (piece_index, begin, length)
 
-        return None
+            return None
 
     def handle_piece_received(self, piece_index, begin, data):
-        if piece_index < 0 or piece_index >= self.total_pieces:
-            return None
+        with self.lock: 
+            if piece_index < 0 or piece_index >= self.total_pieces:
+                return None
 
-        if piece_index in self.completed_pieces:
-            return None
+            if piece_index in self.completed_pieces:
+                return None
 
-        piece = self.pieces[piece_index]
+            piece = self.pieces[piece_index]
 
-        piece.add_block(begin, data)
+            piece.add_block(begin, data)
 
-        if piece.is_complete():
-            expected_hash = self.get_piece_hash(piece_index)
+            if piece.is_complete():
+                expected_hash = self.get_piece_hash(piece_index)
 
-            if piece.verify(expected_hash):
-                self.in_progress_pieces.discard(piece_index)
-                self.completed_pieces.add(piece_index)
+                if piece.verify(expected_hash):
+                    self.in_progress_pieces.discard(piece_index)
+                    self.completed_pieces.add(piece_index)
 
-                print(f"Piece {piece_index} completed and verified")
+                    print(f"Piece {piece_index} completed and verified")
 
-                return piece_index   # 🔥 THIS LINE IS MISSING IN YOUR CODE
+                    return piece_index   # 🔥 THIS LINE IS MISSING IN YOUR CODE
 
-            else:
-                print(f"Piece {piece_index} failed verification, retrying")
+                else:
+                    print(f"Piece {piece_index} failed verification, retrying")
 
-                piece.reset()
-                self.in_progress_pieces.discard(piece_index)
-                self.missing_pieces.add(piece_index)
+                    piece.reset()
+                    self.in_progress_pieces.discard(piece_index)
+                    self.missing_pieces.add(piece_index)
 
-        return None      
+            return None      
     
     def get_piece_data(self, index):
         return self.pieces[index].assemble()
