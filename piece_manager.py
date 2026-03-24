@@ -64,6 +64,50 @@ class PieceManager:
 
             return None
 
+    def get_next_block_request_for_peer(self, peer_pieces):
+        with self.lock:
+            for piece_index in self.in_progress_pieces:
+                if piece_index not in peer_pieces:
+                    continue
+
+                piece = self.pieces[piece_index]
+                block = piece.get_next_block()
+
+                if block is not None:
+                    begin, length = block
+                    return (piece_index, begin, length)
+
+            for piece_index in list(self.missing_pieces):
+                if piece_index not in peer_pieces:
+                    continue
+
+                self.missing_pieces.remove(piece_index)
+                self.in_progress_pieces.add(piece_index)
+
+                piece = self.pieces[piece_index]
+                block = piece.get_next_block()
+
+                if block is not None:
+                    begin, length = block
+                    return (piece_index, begin, length)
+
+                # Defensive rollback if no block was available.
+                self.in_progress_pieces.discard(piece_index)
+                self.missing_pieces.add(piece_index)
+
+            return None
+
+    def release_block_request(self, piece_index, begin):
+        with self.lock:
+            if piece_index < 0 or piece_index >= self.total_pieces:
+                return
+
+            if piece_index in self.completed_pieces:
+                return
+
+            piece = self.pieces[piece_index]
+            piece.release_block(begin)
+
     def handle_piece_received(self, piece_index, begin, data):
         with self.lock: 
             if piece_index < 0 or piece_index >= self.total_pieces:
@@ -134,6 +178,15 @@ class Piece:
                 length = min(self.block_size, self.piece_length - begin)
                 return (begin, length)
         return None
+
+    def release_block(self, begin):
+        block_index = begin // self.block_size
+
+        if block_index >= self.num_blocks:
+            return
+
+        if not self.blocks_received[block_index]:
+            self.blocks_requested[block_index] = False
 
     def is_complete(self):
         return all(self.blocks_received)
