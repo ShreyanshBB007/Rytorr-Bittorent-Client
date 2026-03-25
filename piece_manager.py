@@ -47,6 +47,11 @@ class PieceManager:
             raise IndexError("Invalid piece index")
         return self.piece_hashes[index]
 
+    def get_piece_length(self, index):
+        if index < 0 or index >= self.total_pieces:
+            raise IndexError("Invalid piece index")
+        return self.pieces[index].piece_length
+
     def get_next_block_request_for_peer(self, peer_pieces):
         with self.lock:
             endgame_mode = self.is_endgame()
@@ -86,6 +91,16 @@ class PieceManager:
                 self.missing_pieces.add(piece_index)
 
             return None
+
+    def release_block_request(self, piece_index, begin):
+        with self.lock:
+            if piece_index < 0 or piece_index >= self.total_pieces:
+                return
+
+            if piece_index in self.completed_pieces:
+                return
+
+            self.pieces[piece_index].release_block(begin)
 
     def handle_piece_received(self, piece_index, begin, data):
         with self.lock: 

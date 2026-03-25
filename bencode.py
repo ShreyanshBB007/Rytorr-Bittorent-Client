@@ -55,7 +55,7 @@ def decode_dict(data, index):
         else:
             val, index = decode_string(data, index)
 
-        items[keystring.decode()] = val
+        items[keystring.decode("utf-8", errors="replace")] = val
 
     return items, index + 1
 

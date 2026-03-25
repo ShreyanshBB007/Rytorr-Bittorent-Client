@@ -33,3 +33,14 @@ def build_request(piece_index, begin, block_length):
     length_bytes = block_length.to_bytes(4, "big")
 
     return length_prefix + msg_id + index_bytes + begin_bytes + length_bytes
+
+def build_piece(index, begin, block):
+    length = 9 + len(block)
+    
+    return (
+        length.to_bytes(4, "big") +
+        b'\x07' +
+        index.to_bytes(4, "big") +
+        begin.to_bytes(4, "big") +
+        block
+    )

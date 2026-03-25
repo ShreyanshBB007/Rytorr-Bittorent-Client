@@ -2,6 +2,7 @@ from torrent_parser import Torrent
 from tracker_client import TrackerClient
 from peer_connection import handshake_with_peer
 from peer_messages import build_interested
+from peer_messages import build_piece
 from peer_messages import build_request
 from downloader import recv_message
 from piece_manager import PieceManager
@@ -10,11 +11,49 @@ import socket
 import os
 import threading
 import time
+from resume import load_progress, save_progress
+
+
+REQUEST_TIMEOUT_SECONDS = 20
+DEFAULT_MAX_ACTIVE_PEERS = 20
+
+
+def read_block_from_files(piece_index, begin, length, torrent, file_handles):
+    global_offset = piece_index * torrent.piece_length + begin
+
+    remaining = length
+    chunks = []
+
+    for f, fh in file_handles:
+        file_start = f["offset"]
+        file_end = file_start + f["length"]
+
+        if global_offset >= file_end:
+            continue
+
+        if global_offset < file_start:
+            continue
+
+        read_start = global_offset - file_start
+        read_len = min(remaining, file_end - global_offset)
+
+        fh.seek(read_start)
+        chunks.append(fh.read(read_len))
+
+        remaining -= read_len
+        global_offset += read_len
+
+        if remaining <= 0:
+            break
+
+    return b"".join(chunks)
 
 
 def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, file_lock):
     sock = None
     peer_label = f"{ip}:{port}"
+    pending_requests = {}
+    peer_pieces = set()
 
     try:
         print(f"Connecting to {peer_label}")
@@ -31,15 +70,24 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
 
         print(f"Using peer {peer_label}")
 
-        sock.send(build_interested())
+        sock.sendall(build_interested())
         print(f"Sent INTERESTED to {peer_label}")
         sock.settimeout(15)
 
         peer_choking = True
-        peer_pieces = set()
 
         while not piece_manager.is_complete():
             try:
+                now = time.time()
+                expired = [
+                    key for key, ts in pending_requests.items()
+                    if now - ts >= REQUEST_TIMEOUT_SECONDS
+                ]
+
+                for index, begin in expired:
+                    piece_manager.release_block_request(index, begin)
+                    pending_requests.pop((index, begin), None)
+
                 msg_id, payload = recv_message(sock)
 
                 if msg_id is None:
@@ -77,6 +125,8 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
                     begin = int.from_bytes(payload[4:8], "big")
                     block = payload[8:]
 
+                    pending_requests.pop((index, begin), None)
+
                     completed_piece = piece_manager.handle_piece_received(index, begin, block)
 
                     if completed_piece is not None:
@@ -112,12 +162,43 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
 
                                 if remaining <= 0:
                                     break
-
+                        if completed_piece is not None:
+                            save_progress(piece_manager)
                         print(f"Wrote piece {completed_piece} to file at offset {offset}")
 
                         total = piece_manager.total_pieces
                         done = len(piece_manager.completed_pieces)
                         print(f"Progress: {done}/{total} pieces ({(done/total)*100:.2f}%)")
+
+                elif msg_id == 6:
+                    if len(payload) < 12:
+                        continue
+
+                    index = int.from_bytes(payload[0:4], "big")
+                    begin = int.from_bytes(payload[4:8], "big")
+                    length = int.from_bytes(payload[8:12], "big")
+
+                    if index < 0 or index >= piece_manager.total_pieces:
+                        continue
+
+                    if begin < 0 or length <= 0:
+                        continue
+
+                    piece_len = piece_manager.get_piece_length(index)
+                    if begin >= piece_len or begin + length > piece_len:
+                        continue
+
+                    with piece_manager.lock:
+                        has_piece = index in piece_manager.completed_pieces
+
+                    if has_piece:
+                        with file_lock:
+                            block = read_block_from_files(index, begin, length, torrent, file_handles)
+
+                        if len(block) == length:
+                            response = build_piece(index, begin, block)
+                            sock.sendall(response)
+                            print(f"Uploaded block: piece {index}, begin={begin}, length={length}")
 
 
                 if not peer_choking and peer_pieces:
@@ -129,7 +210,8 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
                         print(f"Requesting piece {index}, begin={begin}, length={length}")
 
                         msg = build_request(index, begin, length)
-                        sock.send(msg)
+                        sock.sendall(msg)
+                        pending_requests[(index, begin)] = time.time()
                     else:
                         time.sleep(0.02)
 
@@ -144,6 +226,14 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
     except Exception as e:
         print(f"Fatal error for {peer_label}: {e}")
     finally:
+        for index, begin in list(pending_requests.keys()):
+            piece_manager.release_block_request(index, begin)
+
+        with piece_manager.lock:
+            for piece_index in peer_pieces:
+                if 0 <= piece_index < piece_manager.total_pieces and piece_manager.piece_availability[piece_index] > 0:
+                    piece_manager.piece_availability[piece_index] -= 1
+
         if sock:
             try:
                 sock.close()
@@ -158,23 +248,28 @@ torrent = Torrent("big-buck-bunny.torrent")
 tracker = TrackerClient(torrent)
 piece_manager = PieceManager(torrent)
 
-base_dir = r"C:\Shreyansh\Codes\rytorr-bittorent-client\downloaded-files"
+base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloaded-files")
 
 for f in torrent.files_info:
     path = os.path.join(base_dir, f["path"])
     
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
-    fh = open(path, "wb")
+    mode = "r+b" if os.path.exists(path) else "w+b"
+    fh = open(path, mode)
     file_handles.append((f, fh))
+
+load_progress(piece_manager, torrent, file_handles, file_lock)
 
 threads = []
 peers = tracker.get_peers()
+max_active_peers = int(os.getenv("MAX_ACTIVE_PEERS", str(DEFAULT_MAX_ACTIVE_PEERS)))
+selected_peers = peers[:max_active_peers]
 
-print("Peers:", peers[:5])
+print("Peers:", selected_peers)
 
 try:
-    for ip, port in peers[:5]:
+    for ip, port in selected_peers:
         t = threading.Thread(
             target=download_from_peer,
             args=(ip, port, torrent, tracker, piece_manager, file_handles, file_lock)

@@ -1,16 +1,5 @@
 import socket
-
-
-def recv_exact(sock, n):
-    data = b""
-
-    while len(data) < n:
-        chunk = sock.recv(n - len(data))
-        if not chunk:
-            raise ConnectionError("Peer closed connection during handshake")
-        data += chunk
-
-    return data
+from downloader import recv_exact
 
 def build_handshake(peer_id, info_hash):
     pstr = b'BitTorrent protocol'
@@ -54,7 +43,7 @@ def handshake_with_peer(ip, port, info_hash, peer_id):
 
     handshake = build_handshake(peer_id, info_hash)
 
-    sock.send(handshake)
+    sock.sendall(handshake)
 
     response = recv_exact(sock, 68)
 
