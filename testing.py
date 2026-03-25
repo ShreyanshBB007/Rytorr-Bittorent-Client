@@ -11,6 +11,7 @@ import socket
 import os
 import threading
 import time
+import sys
 from resume import load_progress, save_progress
 
 
@@ -243,7 +244,8 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
 file_handles = []
 file_lock = threading.Lock()
 
-torrent = Torrent("big-buck-bunny.torrent")
+torrent_path = sys.argv[1] if len(sys.argv) > 1 else os.getenv("TORRENT_FILE", "big-buck-bunny.torrent")
+torrent = Torrent(torrent_path)
 
 tracker = TrackerClient(torrent)
 piece_manager = PieceManager(torrent)
@@ -262,11 +264,44 @@ for f in torrent.files_info:
 load_progress(piece_manager, torrent, file_handles, file_lock)
 
 threads = []
-peers = tracker.get_peers()
+print(f"Loading peers for torrent: {torrent.name}")
+print(
+    f"Tracker settings: timeout={tracker.tracker_timeout}s, retries={tracker.tracker_retries}"
+)
+
+try:
+    peers = tracker.get_peers()
+except KeyboardInterrupt:
+    print("Tracker lookup cancelled by user.")
+    for _, fh in file_handles:
+        try:
+            fh.close()
+        except Exception:
+            pass
+    raise SystemExit(130)
+except Exception as e:
+    print(f"Tracker error: {e}")
+    print("Tip: increase TRACKER_TIMEOUT_SECONDS (e.g. 25) and retry.")
+    for _, fh in file_handles:
+        try:
+            fh.close()
+        except Exception:
+            pass
+    raise SystemExit(1)
+
 max_active_peers = int(os.getenv("MAX_ACTIVE_PEERS", str(DEFAULT_MAX_ACTIVE_PEERS)))
 selected_peers = peers[:max_active_peers]
 
 print("Peers:", selected_peers)
+
+if not selected_peers:
+    print("No peers returned by trackers for this torrent right now.")
+    for _, fh in file_handles:
+        try:
+            fh.close()
+        except Exception:
+            pass
+    raise SystemExit(2)
 
 try:
     for ip, port in selected_peers:
