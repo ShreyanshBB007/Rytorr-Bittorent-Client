@@ -136,12 +136,36 @@ class TrackerClient:
     def parse_peers(self, peers):
         peers_list = []
 
-        for i in range(0, len(peers), 6):
-            peer = peers[i:i+6]
+        if isinstance(peers, (bytes, bytearray)):
+            if len(peers) % 6 != 0:
+                raise ValueError("Invalid compact peer list length")
 
-            ip = ".".join(str(b) for b in peer[:4])
-            port = int.from_bytes(peer[4:], "big")
+            for i in range(0, len(peers), 6):
+                peer = peers[i:i+6]
 
-            peers_list.append((ip,port))
+                ip = ".".join(str(b) for b in peer[:4])
+                port = int.from_bytes(peer[4:], "big")
 
-        return peers_list
+                peers_list.append((ip, port))
+
+            return peers_list
+
+        if isinstance(peers, list):
+            for peer in peers:
+                if not isinstance(peer, dict):
+                    continue
+
+                ip = peer.get("ip")
+                port = peer.get("port")
+
+                if isinstance(ip, bytes):
+                    ip = ip.decode(errors="ignore")
+
+                if ip is None or port is None:
+                    continue
+
+                peers_list.append((str(ip), int(port)))
+
+            return peers_list
+
+        raise TypeError("Unsupported peers format in tracker response")

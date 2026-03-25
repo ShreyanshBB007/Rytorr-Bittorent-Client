@@ -54,8 +54,23 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
                     peer_choking = True
 
                 elif msg_id == 5:
-                    peer_pieces = set(parse_bitfield(payload))
+                    peer_pieces = {
+                        p for p in parse_bitfield(payload)
+                        if 0 <= p < piece_manager.total_pieces
+                    }
+                    with piece_manager.lock:
+                        for p in peer_pieces:
+                            piece_manager.piece_availability[p] += 1
                     print(f"Peer has {len(peer_pieces)} pieces")
+
+                elif msg_id == 4:
+                    if len(payload) >= 4:
+                        piece_index = int.from_bytes(payload[0:4], "big")
+
+                        if 0 <= piece_index < piece_manager.total_pieces and piece_index not in peer_pieces:
+                            peer_pieces.add(piece_index)
+                            with piece_manager.lock:
+                                piece_manager.piece_availability[piece_index] += 1
 
                 elif msg_id == 7:
                     index = int.from_bytes(payload[0:4], "big")
@@ -126,8 +141,8 @@ def download_from_peer(ip, port, torrent, tracker, piece_manager, file_handles, 
                 print("Error:", e)
                 break
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Fatal error for {peer_label}: {e}")
     finally:
         if sock:
             try:
@@ -158,15 +173,22 @@ peers = tracker.get_peers()
 
 print("Peers:", peers[:5])
 
-for ip, port in peers[:5]:
-    t = threading.Thread(
-        target=download_from_peer,
-        args=(ip, port, torrent, tracker, piece_manager, file_handles, file_lock)
-    )
-    t.start()
-    threads.append(t)
+try:
+    for ip, port in peers[:5]:
+        t = threading.Thread(
+            target=download_from_peer,
+            args=(ip, port, torrent, tracker, piece_manager, file_handles, file_lock)
+        )
+        t.start()
+        threads.append(t)
 
-for t in threads:
-    t.join()
+    for t in threads:
+        t.join()
 
-print("Download complete!")
+    print("Download complete!")
+finally:
+    for _, fh in file_handles:
+        try:
+            fh.close()
+        except Exception:
+            pass

@@ -1,5 +1,17 @@
 import socket
 
+
+def recv_exact(sock, n):
+    data = b""
+
+    while len(data) < n:
+        chunk = sock.recv(n - len(data))
+        if not chunk:
+            raise ConnectionError("Peer closed connection during handshake")
+        data += chunk
+
+    return data
+
 def build_handshake(peer_id, info_hash):
     pstr = b'BitTorrent protocol'
     pstrlen  = len(pstr)
@@ -44,7 +56,7 @@ def handshake_with_peer(ip, port, info_hash, peer_id):
 
     sock.send(handshake)
 
-    response = sock.recv(68)
+    response = recv_exact(sock, 68)
 
     if validate_handshake(response, info_hash):
 
@@ -57,22 +69,3 @@ def handshake_with_peer(ip, port, info_hash, peer_id):
         sock.close()
 
         return None
-    
-def parse_handshake(handshake):
-
-    if len(handshake) != 68:
-        raise ValueError("Invalid handshake length")
-
-    pstrlen = handshake[0]
-    pstr = handshake[1:20]
-    reserved = handshake[20:28]
-    info_hash = handshake[28:48]
-    peer_id = handshake[48:68]
-
-    return {
-        "pstrlen": pstrlen,
-        "protocol": pstr,
-        "reserved": reserved,
-        "info_hash": info_hash,
-        "peer_id": peer_id
-    }
