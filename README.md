@@ -1,4 +1,4 @@
-# ⚡ RyTorr
+# ⚡ RyTorr ⚡
 
 A lightweight BitTorrent client built from scratch in Python with a modern web UI.
 
