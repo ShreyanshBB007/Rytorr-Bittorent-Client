@@ -1,7 +1,43 @@
-downloaded-files
-
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
 
-sintel.torrent
-big-buck-bunny.torrent
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Downloaded content
+downloaded-files/
+Big Buck Bunny/
+
+# Torrent files (test files)
+*.torrent
+torrents/
+
+# Resume/state files
+progress.resume
+*.resume
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
