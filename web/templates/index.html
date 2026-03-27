@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RyTorr - BitTorrent Client</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+                <span class="logo-text">RyTorr</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="openAddModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Torrent
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Stats Bar -->
+            <div class="stats-bar">
+                <div class="stat">
+                    <span class="stat-label">Download</span>
+                    <span class="stat-value" id="global-download">0 B/s</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Upload</span>
+                    <span class="stat-value" id="global-upload">0 B/s</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Active</span>
+                    <span class="stat-value" id="active-count">0</span>
+                </div>
+            </div>
+
+            <!-- Torrent List -->
+            <div class="torrent-list" id="torrent-list">
+                <div class="empty-state" id="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <h3>No torrents yet</h3>
+                    <p>Add a .torrent file to start downloading</p>
+                    <button class="btn btn-primary" onclick="openAddModal()">Add Torrent</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Add Torrent Modal -->
+        <div class="modal-overlay" id="add-modal" onclick="closeAddModal(event)">
+            <div class="modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2>Add Torrent</h2>
+                    <button class="modal-close" onclick="closeAddModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-zone" id="upload-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <p>Drag & drop .torrent file here</p>
+                        <span>or</span>
+                        <label class="btn btn-secondary">
+                            Browse Files
+                            <input type="file" accept=".torrent" onchange="handleFileSelect(event)" hidden>
+                        </label>
+                    </div>
+                    <div class="selected-file" id="selected-file" style="display: none;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span id="selected-file-name"></span>
+                        <button class="btn-icon" onclick="clearSelectedFile()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                    <button class="btn btn-primary" id="start-download-btn" onclick="startDownload()" disabled>
+                        Start Download
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Torrent Details Modal -->
+        <div class="modal-overlay" id="details-modal" onclick="closeDetailsModal(event)">
+            <div class="modal modal-large" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2 id="details-name">Torrent Details</h2>
+                    <button class="modal-close" onclick="closeDetailsModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="tabs">
+                        <button class="tab active" onclick="switchTab('info')">Info</button>
+                        <button class="tab" onclick="switchTab('files')">Files</button>
+                        <button class="tab" onclick="switchTab('peers')">Peers</button>
+                    </div>
+                    <div class="tab-content" id="tab-info">
+                        <div class="info-grid" id="details-info"></div>
+                    </div>
+                    <div class="tab-content" id="tab-files" style="display: none;">
+                        <div class="files-list" id="details-files"></div>
+                    </div>
+                    <div class="tab-content" id="tab-peers" style="display: none;">
+                        <div class="peers-table" id="details-peers"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
